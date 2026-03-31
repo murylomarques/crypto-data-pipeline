@@ -1,102 +1,139 @@
-﻿# crypto-data-pipeline
+# crypto-data-pipeline
 
-Pipeline de dados de criptomoedas com execução local e arquitetura orientada a camadas:
+Pipeline de engenharia de dados para mercado de criptomoedas, com fluxo ponta a ponta:
 
-`API -> Ingestão -> Data Lake -> Transformação -> Data Warehouse -> Dashboard`
+`CoinGecko API -> Ingestao -> Data Lake (raw) -> PostgreSQL (raw) -> dbt (staging/marts) -> Dashboard`
 
-## Visão geral
-Este projeto coleta snapshots de mercado da CoinGecko, persiste dados brutos em data lake local, carrega a camada raw no PostgreSQL, transforma os dados com dbt e disponibiliza uma base analítica para dashboard.
+## Objetivo
+Construir um projeto realista de portfolio que demonstre as etapas principais de um pipeline moderno de dados:
+- coleta de dados externos;
+- persistencia em camada raw;
+- modelagem analitica com dbt;
+- orquestracao com Airflow;
+- consumo em dashboard.
 
-## Arquitetura
-- Fonte: CoinGecko API
-- Ingestão: `ingestion/coingecko_ingestion.py`
-- Data Lake raw local: `data_lake/raw/coingecko/market_snapshot/...`
-- Carga raw no DW: `warehouse/load_raw_to_postgres.py`
-- Orquestração: Airflow DAG `crypto_market_pipeline`
-- Transformação: dbt (`staging` e `marts`)
-- Consumo: Metabase (consultas iniciais em `dashboard/sql/metabase_queries.sql`)
+## Fluxo do pipeline
+### Fluxo funcional
+1. O script de ingestao consulta a API da CoinGecko.
+2. O payload bruto e salvo no data lake local, particionado por data/hora.
+3. O loader le o ultimo arquivo raw e faz upsert em `raw.crypto_market` no PostgreSQL.
+4. O dbt transforma `raw` em `staging` e depois em `analytics`.
+5. O Metabase consome a tabela analitica para visualizacao.
 
-Detalhamento textual da arquitetura: `docs/architecture.txt`.
+### Fluxo visual
+```mermaid
+flowchart LR
+    A[CoinGecko API] --> B[ingestion/coingecko_ingestion.py]
+    B --> C[data_lake/raw/coingecko/market_snapshot]
+    C --> D[warehouse/load_raw_to_postgres.py]
+    D --> E[(PostgreSQL raw.crypto_market)]
+    E --> F[dbt staging.stg_crypto_market]
+    F --> G[dbt analytics.mart_crypto_daily_metrics]
+    G --> H[Metabase Dashboard]
+```
+
+## Orquestracao (Airflow)
+DAG: `crypto_market_pipeline`
+- tarefa 1: `ingest_market_snapshot`
+- tarefa 2: `load_raw_to_postgres`
+- schedule: `0 * * * *` (hora em hora)
+
+A DAG pode ser testada localmente com:
+```bash
+airflow dags test crypto_market_pipeline 2026-03-31
+```
+
+## Camadas de dados
+### Raw
+Tabela: `raw.crypto_market`
+- granularidade: snapshot por ativo e timestamp de ingestao
+- chave: `(coin_id, snapshot_at)`
+- objetivo: preservar historico bruto para reprocessamento
+
+### Staging
+Modelo: `staging.stg_crypto_market`
+- padroniza colunas da camada raw
+- prepara tipos e campos para analise
+
+### Analytics
+Modelo: `analytics.mart_crypto_daily_metrics`
+- agrega metricas diarias por ativo
+- foco em consumo por BI
 
 ## Stack
-- Python
-- Docker / Docker Compose
-- Apache Airflow
-- PostgreSQL
-- dbt (Postgres)
-- Metabase
+- Python (ingestao e carga)
+- PostgreSQL (warehouse local)
+- dbt-postgres (transformacao)
+- Apache Airflow (orquestracao)
+- Metabase (dashboard)
+- Docker Compose (ambiente local)
 
-## Estrutura do projeto
-- `airflow/`: DAGs e logs locais do Airflow
-- `docker/`: compose e Dockerfile do Airflow
-- `ingestion/`: coleta e persistência raw
-- `warehouse/`: DDL e carga no PostgreSQL
-- `dbt/`: projeto dbt (staging + marts + testes)
-- `dashboard/`: camada de consumo e consultas iniciais
-- `docs/`: documentação técnica
+## Estrutura do repositorio
+- `airflow/`: DAGs
+- `docker/`: compose e imagem do Airflow
+- `ingestion/`: coleta e persistencia raw
+- `warehouse/`: DDL e carga para PostgreSQL
+- `dbt/`: modelos, testes e macros
+- `dashboard/`: consultas iniciais para Metabase
+- `docs/`: documentos de arquitetura
 
-## Pré-requisitos
-- Docker e Docker Compose
-- Python 3.11+
-
-## Configuração
-1. Copie o arquivo de ambiente:
-   - `cp .env.example .env` (Linux/Mac)
-   - `Copy-Item .env.example .env` (PowerShell)
-2. Ajuste variáveis se necessário.
-
-## Execução local
-### 1) Subir serviços
+## Como executar localmente
+### 1) Subir infraestrutura
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-Serviços esperados:
+Servicos:
 - PostgreSQL: `localhost:5432`
-- Airflow UI: `http://localhost:8080` (user `admin`, senha `admin`)
+- Airflow: `http://localhost:8080` (`admin` / `admin`)
 - Metabase: `http://localhost:3000`
 
-### 2) Rodar ingestão manual (opcional)
+### 2) Rodar ingestao manual
 ```bash
-python ingestion/coingecko_ingestion.py
+docker exec crypto_airflow_webserver python /opt/project/ingestion/coingecko_ingestion.py
 ```
 
-### 3) Carregar raw no PostgreSQL (opcional)
+### 3) Carregar no PostgreSQL
 ```bash
-python warehouse/load_raw_to_postgres.py
+docker exec crypto_airflow_webserver python /opt/project/warehouse/load_raw_to_postgres.py
 ```
 
-### 4) Rodar transformações dbt
+### 4) Transformar com dbt
 ```bash
-pip install -r requirements.txt
-set DBT_PROFILES_DIR=dbt   # PowerShell: $env:DBT_PROFILES_DIR='dbt'
-dbt run --project-dir dbt
-dbt test --project-dir dbt
+docker exec crypto_airflow_webserver bash -lc "cd /opt/project && export DBT_PROFILES_DIR=/opt/project/dbt && dbt run --project-dir dbt"
+docker exec crypto_airflow_webserver bash -lc "cd /opt/project && export DBT_PROFILES_DIR=/opt/project/dbt && dbt test --project-dir dbt"
 ```
 
-### 5) Orquestração com Airflow
-A DAG `crypto_market_pipeline` executa:
-1. `ingest_market_snapshot`
-2. `load_raw_to_postgres`
+### 5) Validar DAG
+```bash
+docker exec crypto_airflow_webserver airflow dags list
+docker exec crypto_airflow_webserver airflow dags test crypto_market_pipeline 2026-03-31
+```
 
-Agendamento: a cada hora (`0 * * * *`).
+## Evidencias de validacao
+- ingestao: `50` registros coletados e persistidos no raw local
+- carga: `50` registros em `raw.crypto_market`
+- dbt: `run` e `test` executados com sucesso
+- Airflow: `dags test` concluido com status `success`
 
-## Camadas de dados
-- `raw.crypto_market`: tabela de snapshots brutos da CoinGecko
-- `staging.stg_crypto_market`: normalização da camada raw
-- `analytics.mart_crypto_daily_metrics`: métricas diárias por ativo
+## Consultas de verificacao
+```sql
+SELECT COUNT(*) FROM raw.crypto_market;
+SELECT COUNT(*) FROM analytics.mart_crypto_daily_metrics;
+```
 
-## Decisões técnicas
-- Primeiro release com data lake local para reduzir acoplamento operacional.
-- Estrutura de particionamento no raw preparada para evolução para S3.
-- Pipeline com etapas separadas (ingestão, carga, transformação) para facilitar manutenção e observabilidade.
+## Decisoes tecnicas
+- comecar com data lake local para reduzir complexidade inicial;
+- manter layout de pastas e particionamento prontos para migracao para S3;
+- separar claramente ingestao, carga e transformacao para facilitar manutencao.
 
-## Roadmap
-1. Adicionar escrita em S3 mantendo fallback local
-2. Incluir monitoramento/alertas no Airflow
-3. Criar mais marts analíticos (tendência semanal, volatilidade)
-4. Publicar dashboard com indicadores de preço, volume e ranking
+## Limites atuais
+- sem CI/CD ainda;
+- sem deploy em nuvem;
+- dashboard com camada inicial (queries base), sem produto visual final publicado.
 
-## Estado atual
-- Pipeline funcional em ambiente local com componentes principais implementados.
-- Adoção de CI/CD e deploy em nuvem ainda não implementados.
+## Proximos passos
+1. Adicionar CI (lint + testes + dbt parse/run em ambiente de pipeline).
+2. Evoluir data lake para S3 mantendo compatibilidade local.
+3. Incluir monitoramento e alertas no Airflow.
+4. Publicar dashboard final com KPI de preco, volume e variacao 24h.
