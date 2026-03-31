@@ -1,0 +1,36 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Env
+.env
+
+# Data and logs
+data/
+data_lake/
+logs/
+*.log
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+airflow/__pycache__/
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build / tooling
+.pytest_cache/
+.mypy_cache/
+.coverage

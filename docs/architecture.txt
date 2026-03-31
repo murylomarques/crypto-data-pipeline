@@ -1,0 +1,20 @@
+﻿# Arquitetura (texto) - crypto-data-pipeline
+
+## Fluxo ponta a ponta
+1. Fonte: CoinGecko API
+2. Ingestão: script Python em `ingestion/coingecko_ingestion.py`
+3. Data Lake: arquivos raw em `data_lake/raw/coingecko/market_snapshot/`
+4. Carga no DW: `warehouse/load_raw_to_postgres.py`
+5. Orquestração: Airflow DAG em `airflow/dags/crypto_market_pipeline.py`
+6. Transformação: dbt (`dbt/models/staging` e `dbt/models/marts`)
+7. Consumo: Metabase com consultas em `dashboard/sql/metabase_queries.sql`
+
+## Organização de schemas no PostgreSQL
+- `raw`: dados brutos carregados da API
+- `staging`: padronização e preparo para análises
+- `analytics`: tabelas analíticas para dashboard
+
+## Estado atual
+- Estrutura e código base do pipeline implementados
+- Execução local via Docker Compose disponível
+- Próximas evoluções: S3, observabilidade e deploy em nuvem
