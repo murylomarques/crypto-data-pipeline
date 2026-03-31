@@ -1,4 +1,4 @@
-﻿crypto_data_pipeline:
+crypto_data_pipeline:
   target: dev
   outputs:
     dev:

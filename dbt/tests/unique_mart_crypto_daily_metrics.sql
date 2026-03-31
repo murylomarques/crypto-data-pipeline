@@ -1,4 +1,4 @@
-﻿SELECT
+SELECT
     coin_id,
     snapshot_date,
     COUNT(*) AS row_count
