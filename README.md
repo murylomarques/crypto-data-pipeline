@@ -1,4 +1,4 @@
-# crypto-data-pipeline
+﻿# crypto-data-pipeline
 
 Pipeline de engenharia de dados para mercado de criptomoedas, com fluxo ponta a ponta:
 
@@ -128,12 +128,19 @@ SELECT COUNT(*) FROM analytics.mart_crypto_daily_metrics;
 - separar claramente ingestao, carga e transformacao para facilitar manutencao.
 
 ## Limites atuais
-- sem CI/CD ainda;
+- CI basico implementado (validacoes de sintaxe, compose e dbt parse), sem pipeline de deploy ainda;
 - sem deploy em nuvem;
 - dashboard com camada inicial (queries base), sem produto visual final publicado.
 
 ## Proximos passos
-1. Adicionar CI (lint + testes + dbt parse/run em ambiente de pipeline).
+1. Evoluir o CI para incluir testes de integracao com banco efemero.
 2. Evoluir data lake para S3 mantendo compatibilidade local.
 3. Incluir monitoramento e alertas no Airflow.
 4. Publicar dashboard final com KPI de preco, volume e variacao 24h.
+
+## Qualidade e governanca
+- License: MIT (`LICENSE`).
+- CI pipeline: GitHub Actions (`.github/workflows/ci.yml`) validating Python syntax, Docker Compose config and dbt parse.
+- Collaboration guide: `CONTRIBUTING.md` with commit style and PR checklist.
+
+
