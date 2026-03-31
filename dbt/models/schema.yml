@@ -1,0 +1,22 @@
+﻿version: 2
+
+models:
+  - name: stg_crypto_market
+    description: "Staging model for raw CoinGecko market snapshots"
+    columns:
+      - name: coin_id
+        tests:
+          - not_null
+      - name: snapshot_at
+        tests:
+          - not_null
+
+  - name: mart_crypto_daily_metrics
+    description: "Daily aggregated metrics per coin"
+    columns:
+      - name: coin_id
+        tests:
+          - not_null
+      - name: snapshot_date
+        tests:
+          - not_null
